@@ -96,12 +96,13 @@ int main(int argc, char** argv)
 	//SSL_write
 	
 	int bufflen=0;
-	char buf[BUFFER_SIZE];
-	memset(buf,0,sizeof(buf));
+	char *buf=new char[randomNumber.size()+1];
+	//memset(buf,0,sizeof(buf));
+	buf[randomNumber.size()]=0;
+	memcpy(buf,randomNumber.c_str(),randomNumber.size());
 	bufflen=SSL_write(ssl,buf,BUFFER_SIZE);
-    
     printf("SUCCESS.\n");
-	printf("    (Challenge sent: \"%s\")\n", randomNumber.c_str());
+	printf("    (Challenge sent: \"%s\")\n", buf);
 
     //-------------------------------------------------------------------------
 	// 3a. Receive the signed key from the server

@@ -53,7 +53,7 @@ int main(int argc, char** argv)
 	// Setup client context
     SSL_CTX* ctx = SSL_CTX_new(SSLv23_method());
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
-//	SSL_CTX_set_options(ctx, SSL_OP_ALL|SSL_OP_NO_SSLv2);
+	SSL_CTX_set_options(ctx, SSL_OP_ALL|SSL_OP_NO_SSLv2);
 	if (SSL_CTX_set_cipher_list(ctx, "ADH") != 1)
 	{
 		printf("Error setting cipher list. Sad christmas...\n");
