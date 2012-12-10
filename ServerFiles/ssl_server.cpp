@@ -6,6 +6,7 @@
 //----------------------------------------------------------------------------
 #include <string>
 #include <time.h>
+#include <iostream>
 using namespace std;
 
 #include <openssl/ssl.h>	// Secure Socket Layer library
@@ -99,9 +100,10 @@ int main(int argc, char** argv)
 	printf("2. Waiting for client to connect and send challenge...");
     
 	int bufflen=0;
-	unsigned char buff[BUFFER_SIZE];
-	//memset(buff,0,sizeof(buff));
-	bufflen=SSL_read(ssl,buff,BUFFER_SIZE);
+	unsigned char buff[1024];
+	memset(buff,0,sizeof(buff));
+	bufflen=SSL_read(ssl,buff,1024);
+
     //SSL_read;
     
 	printf("DONE.\n");
@@ -110,55 +112,64 @@ int main(int argc, char** argv)
     //-------------------------------------------------------------------------
 	// 3. Generate the SHA1 hash of the challenge
 	printf("3. Generating SHA1 hash...");
-	int mdlen=0;
-	int writelen=0;;
-	unsigned char hashWrite[SHA_DIGEST_LENGTH];
-	unsigned char hashRead[SHA_DIGEST_LENGTH];
-	SHA1(buff,bufflen,hashWrite);
-	BIO *mem=BIO_new(BIO_s_mem());
-	BIO *md=BIO_new(BIO_f_md());
-	BIO_set_md(md,EVP_sha1());
-	mem=BIO_push(md,mem);
-	writelen=BIO_write(mem,hashWrite,bufflen);
-	mdlen=BIO_read(mem,hashRead,BUFFER_SIZE);
-
+	//int mdlen=0;
+	//int writelen=0;
+	unsigned char hashWrite[1024];
+	BIO *fp=BIO_new_file("rsaprivatekey.pem","r");
+	RSA *x;
+	x=PEM_read_bio_RSAPrivateKey(fp,NULL,0,0);
+	BIO *fpp=BIO_new_file("rsapublickey.pem","r");
+	RSA *xx;
+	xx=PEM_read_bio_RSA_PUBKEY(fpp,NULL,0,0);
+	unsigned char unencrypted[128];
+	memset(unencrypted,0,sizeof(unencrypted));
+	RSA_private_decrypt(128,buff,unencrypted,x,RSA_NO_PADDING);
+	//unsigned char hashRead[SHA_DIGEST_LENGTH];
+	SHA1(unencrypted,bufflen,hashWrite);
+	//BIO *mem=BIO_new(BIO_s_mem());
+	//BIO *md=BIO_new(BIO_f_md());
+	//BIO_set_md(md,EVP_sha1());
+	//mem=BIO_push(md,mem);
+	//writelen=BIO_write(mem,hashWrite,bufflen);
+	//mdlen=BIO_read(mem,hashRead,BUFFER_SIZE);
+	
 
 	printf("SUCCESS.\n");
-	printf("    (SHA1 hash: \"%s\" (%d bytes))\n", hashRead, mdlen);
+	printf("    (SHA1 hash: \"%s\" (%d bytes))\n", hashWrite, SHA_DIGEST_LENGTH);
 
     //-------------------------------------------------------------------------
 	// 4. Sign the key using the RSA private key specified in the
 	//     file "rsaprivatekey.pem"
 	printf("4. Signing the key...");
-	unsigned char* signature;
-	BIO *fp=BIO_new_file("../CryptoFiles/rsaprivatekey.pem","r");
-	printf("error");
-	RSA **x;
-	printf("error");
-	*x=PEM_read_bio_RSAPrivateKey(fp,x,0,0);//segfaulting PROBLEMHERE
-	printf("error");
-	int siglen=RSA_private_encrypt(20,hashRead,signature,*x,RSA_PKCS1_PADDING);
-
+	unsigned char sigret[1024];
+	unsigned int siglen[1024];
+	int s=128;
+	//long sig=0;
+	RSA_sign(NID_sha1,hashWrite,102,sigret,siglen,x);
+	RSA_verify(NID_sha1,hashWrite,102,sigret,s,xx);
+	//char errbuf[128];
+	//sig=ERR_get_error();
+	//ERR_error_string(sig,errbuf);
+	//cout << endl << errbuf << endl;
     printf("DONE.\n");
-    printf("    (Signed key length: %d bytes)\n", siglen);
-    printf("    (Signature: \"%s\" (%d bytes))\n", buff2hex((const unsigned char*)signature, siglen).c_str(), siglen);
+    printf("    (Signed key length: %d bytes)\n", s);
+    printf("    (Signature: \"%s\" (%d bytes))\n", buff2hex((const unsigned char*)sigret, s).c_str(), s);
 
     //-------------------------------------------------------------------------
 	// 5. Send the signature to the client for authentication
 	printf("5. Sending signature to client for authentication...");
-
-	//BIO_flush
-	//SSL_write
-
-    printf("DONE.\n");
+	
+	int sigWriteLen=0;
+	sigWriteLen=SSL_write(ssl,sigret,128);
+	printf("DONE.\n");
     
     //-------------------------------------------------------------------------
 	// 6. Receive a filename request from the client
 	printf("6. Receiving file request from client...");
-
     //SSL_read
-    char file[BUFFER_SIZE];
+    unsigned char file[BUFFER_SIZE];
     memset(file,0,sizeof(file));
+    bufflen=SSL_read(ssl,file,BUFFER_SIZE);
     printf("RECEIVED.\n");
     printf("    (File requested: \"%s\"\n", file);
 
@@ -192,5 +203,6 @@ int main(int argc, char** argv)
 	// Freedom!
     
 	BIO_free_all(server);
+	//BIO_free_all(mem);
 	return EXIT_SUCCESS;
 }

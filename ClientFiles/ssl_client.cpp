@@ -7,6 +7,7 @@
 #include <string>
 #include <time.h>               // to seed random number generator
 #include <sstream>          // stringstreams
+#include <iostream>
 using namespace std;
 
 #include <openssl/ssl.h>	// Secure Socket Layer library
@@ -92,25 +93,31 @@ int main(int argc, char** argv)
 	// 2. Send the server a random number
 	printf("2.  Sending challenge to the server...");
     
-    string randomNumber="31337";
+	string randomNumber = "31337";
 	//SSL_write
-	
-	int bufflen=0;
-	char *buf=new char[randomNumber.size()+1];
-	//memset(buf,0,sizeof(buf));
-	buf[randomNumber.size()]=0;
-	memcpy(buf,randomNumber.c_str(),randomNumber.size());
-	bufflen=SSL_write(ssl,buf,BUFFER_SIZE);
-    printf("SUCCESS.\n");
-	printf("    (Challenge sent: \"%s\")\n", buf);
+	unsigned char buf[1024];
+	memset(buf,0,sizeof(buf));
+	BIO *fp=BIO_new_file("rsapublickey.pem","r");
+	RSA *x;
+	x=PEM_read_bio_RSA_PUBKEY(fp,NULL,0,0);
+	RSA_public_encrypt(128,(unsigned char*)randomNumber.c_str(),buf,x,RSA_NO_PADDING);
 
+	SSL_write(ssl,buf,128);
+	BIO_flush(client);
+	unsigned char hash[1024];
+	SHA1((unsigned char*)randomNumber.c_str(),128,hash);
+	printf("SUCCESS.\n");
+	printf("    (Challenge sent: \"%s\")\n", buf);
+	
     //-------------------------------------------------------------------------
 	// 3a. Receive the signed key from the server
 	printf("3a. Receiving signed key from server...");
 
-    char* buff="FIXME";
-    int len=5;
+    unsigned char buff[1024];
+    int len=0;
 	//SSL_read;
+    len=SSL_read(ssl,buff,128);
+
 
 	printf("RECEIVED.\n");
 	printf("    (Signature: \"%s\" (%d bytes))\n", buff2hex((const unsigned char*)buff, len).c_str(), len);
@@ -119,19 +126,26 @@ int main(int argc, char** argv)
 	// 3b. Authenticate the signed key
 	printf("3b. Authenticating key...");
 
-	//BIO_new(BIO_s_mem())
-	//BIO_write
-	//BIO_new_file
-	//PEM_read_bio_RSA_PUBKEY
-	//RSA_public_decrypt
+	BIO *mem=BIO_new(BIO_s_mem());
+	BIO_write(mem,buff,128);
+	BIO_push(fp,mem);
+	unsigned char hashR[1024];
+	int mdlen=BIO_read(mem,hashR,1024);
+	cout << endl <<mdlen << endl;
+	unsigned char unencrypted[1024];
+	RSA_public_decrypt(128,hashR,unencrypted,x,RSA_NO_PADDING);
+
+
+	char errbuf[128];
+	long sig;
+	sig=ERR_get_error();
+	ERR_error_string(sig,errbuf);
+	cout << endl << errbuf << endl;
 	//BIO_free
-	
-	string generated_key="";
-	string decrypted_key="";
     
 	printf("AUTHENTICATED\n");
-	printf("    (Generated key: %s)\n", generated_key.c_str());
-	printf("    (Decrypted key: %s)\n", decrypted_key.c_str());
+	printf("    (Generated key: %s)\n", hash);
+	printf("    (Decrypted key: %s)\n", hashR);
 
     //-------------------------------------------------------------------------
 	// 4. Send the server a file request
@@ -140,7 +154,7 @@ int main(int argc, char** argv)
 	PAUSE(2);
 	//BIO_flush
     //BIO_puts
-	//SSL_write
+	SSL_write(ssl,argv[3],BUFFER_SIZE);
 
     printf("SENT.\n");
 	printf("    (File requested: \"%s\")\n", filename);

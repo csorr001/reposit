@@ -92,24 +92,33 @@ int main(int argc, char** argv)
 	// 2. Send the server a random number
 	printf("2.  Sending challenge to the server...");
     
-    string randomNumber="31337";
+	unsigned char randomNumber[20]={3,1,3,3,7};
 	//SSL_write
-	
-	int bufflen=0;
-	char buf[BUFFER_SIZE];
-	memset(buf,0,sizeof(buf));
-	bufflen=SSL_write(ssl,buf,BUFFER_SIZE);
-    
+    unsigned char Hash[BUFFER_SIZE];
+    unsigned char *buf=new unsigned char[20];
+    char *b=new char[20];
+    buf[BUFFER_SIZE]=0;
+    int bufflen=0;
+    memset(buf,0,sizeof(buf));
+    SHA1(randomNumber,BUFFER_SIZE,Hash);
+    BIO *fp=BIO_new_file("rsapublickey.pem","r");
+    RSA *x;
+    x=PEM_read_bio_RSAPublicKey(fp,NULL,0,0);
+    RSA_public_encrypt(20,randomNumber,buf,x,RSA_PKCS1_PADDING);
+    memcpy(b,buf,BUFFER_SIZE);
+    bufflen=SSL_write(ssl,b,BUFFER_SIZE);
     printf("SUCCESS.\n");
-	printf("    (Challenge sent: \"%s\")\n", randomNumber.c_str());
+    printf("    (Challenge sent: \"%s\")\n", buf);
 
     //-------------------------------------------------------------------------
 	// 3a. Receive the signed key from the server
 	printf("3a. Receiving signed key from server...");
 
-    char* buff="FIXME";
-    int len=5;
+    unsigned char buff[BUFFER_SIZE];
+    int len=0;
 	//SSL_read;
+    //len=SSL_read(ssl,buff,BUFFER_SIZE);
+    BIO_read(client,buff,BUFFER_SIZE);
 
 	printf("RECEIVED.\n");
 	printf("    (Signature: \"%s\" (%d bytes))\n", buff2hex((const unsigned char*)buff, len).c_str(), len);
@@ -139,7 +148,7 @@ int main(int argc, char** argv)
 	PAUSE(2);
 	//BIO_flush
     //BIO_puts
-	//SSL_write
+	SSL_write(ssl,argv[3],BUFFER_SIZE);
 
     printf("SENT.\n");
 	printf("    (File requested: \"%s\")\n", filename);
